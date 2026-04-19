@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart, Sparkles, Accessibility, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/PageShell";
+import { store, useStoreSync } from "@/lib/store";
 
 export const Route = createFileRoute("/sobre")({
   head: () => ({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/sobre")({
 });
 
 function AboutPage() {
+  const authed = useStoreSync(() => store.isAuthed());
   return (
     <PageShell>
       <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
@@ -74,13 +76,15 @@ function AboutPage() {
           </div>
         </section>
 
-        <div className="mt-12 flex justify-center">
-          <Button asChild size="lg" className="rounded-full px-6">
-            <Link to="/login">
-              Começar agora <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
+        {!authed && (
+          <div className="mt-12 flex justify-center">
+            <Button asChild size="lg" className="rounded-full px-6">
+              <Link to="/login">
+                Começar agora <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </PageShell>
   );

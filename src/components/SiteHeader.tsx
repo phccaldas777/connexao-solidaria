@@ -9,14 +9,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { store, useStoreSync } from "@/lib/store";
+import { useAuth, auth } from "@/lib/store";
 
 export function SiteHeader() {
-  const authed = useStoreSync(() => store.isAuthed());
+  const { isAuthed } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
-  const navItems = authed
+  const navItems = isAuthed
     ? [
         { to: "/home", label: "Início" },
         { to: "/questionario", label: "Questionário" },
@@ -60,7 +60,7 @@ export function SiteHeader() {
           </Sheet>
 
           <Link to="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-sm">
               <Heart className="h-4 w-4" aria-hidden />
             </span>
             <span className="text-base font-semibold text-foreground">
@@ -83,12 +83,12 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {authed ? (
+          {isAuthed ? (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                store.logout();
+              onClick={async () => {
+                await auth.signOut();
                 navigate({ to: "/" });
               }}
             >

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart, Sparkles, Accessibility, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/PageShell";
-import { store, useStoreSync } from "@/lib/store";
+import { useAuth } from "@/lib/store";
 
 export const Route = createFileRoute("/sobre")({
   head: () => ({
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/sobre")({
 });
 
 function AboutPage() {
-  const authed = useStoreSync(() => store.isAuthed());
+  const { isAuthed } = useAuth();
   return (
     <PageShell>
       <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6">
@@ -63,10 +63,10 @@ function AboutPage() {
               { icon: Heart, title: "Inclusão", desc: "Pensado por e para pessoas neurodivergentes." },
               { icon: Sparkles, title: "Personalização", desc: "Resultados que refletem você, não estereótipos." },
               { icon: Accessibility, title: "Acessibilidade", desc: "Design calmo, com baixa estimulação visual." },
-              { icon: Lock, title: "Privacidade", desc: "Suas respostas ficam no seu navegador." },
+              { icon: Lock, title: "Privacidade", desc: "Suas respostas ficam seguras na sua conta." },
             ].map((v) => (
-              <div key={v.title} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div key={v.title} className="rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 to-accent/40 text-primary">
                   <v.icon className="h-5 w-5" />
                 </span>
                 <h3 className="mt-3 text-base font-semibold">{v.title}</h3>
@@ -76,7 +76,7 @@ function AboutPage() {
           </div>
         </section>
 
-        {!authed && (
+        {!isAuthed && (
           <div className="mt-12 flex justify-center">
             <Button asChild size="lg" className="rounded-full px-6">
               <Link to="/login">

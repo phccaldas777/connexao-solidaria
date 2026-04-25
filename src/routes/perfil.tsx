@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Plus, Trash2, Save } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -8,29 +8,38 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageShell } from "@/components/PageShell";
-import { store, type Profile } from "@/lib/store";
+import { useAuth, useProfile, saveProfile, type Profile } from "@/lib/store";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/perfil")({
   head: () => ({ meta: [{ title: "Meu perfil — Conexão Solidária" }] }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined" && !store.isAuthed()) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: ProfilePage,
 });
 
 function ProfilePage() {
-  const [profile, setProfile] = useState<Profile>(() => store.getProfile());
+  const { user, isAuthed, loading: authLoading } = useAuth();
+  const { profile, setProfile, loading } = useProfile(user);
   const [skill, setSkill] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  if (authLoading) return <PageShell><Loading /></PageShell>;
+  if (!isAuthed) return <Navigate to="/login" />;
+  if (loading) return <PageShell><Loading /></PageShell>;
 
   const update = <K extends keyof Profile>(k: K, v: Profile[K]) =>
     setProfile((p) => ({ ...p, [k]: v }));
 
-  const save = () => {
-    store.setProfile(profile);
-    toast.success("Perfil salvo com sucesso");
+  const save = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveProfile(user.id, profile);
+      toast.success("Perfil salvo com sucesso");
+    } catch {
+      toast.error("Erro ao salvar perfil");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -40,7 +49,7 @@ function ProfilePage() {
         <header className="mb-6">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Meu perfil</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Suas informações ficam salvas localmente, no seu navegador.
+            Suas informações ficam salvas com segurança na sua conta.
           </p>
         </header>
 
@@ -79,7 +88,6 @@ function ProfilePage() {
           </TabsContent>
 
           <TabsContent value="curriculo" className="mt-6 space-y-6">
-            {/* Formação */}
             <Section
               title="Formação"
               onAdd={() =>
@@ -89,9 +97,7 @@ function ProfilePage() {
                 ])
               }
             >
-              {profile.education.length === 0 && (
-                <Empty text="Nenhuma formação adicionada." />
-              )}
+              {profile.education.length === 0 && <Empty text="Nenhuma formação adicionada." />}
               {profile.education.map((ed, i) => (
                 <div
                   key={i}
@@ -131,10 +137,7 @@ function ProfilePage() {
                       size="icon"
                       aria-label="Remover"
                       onClick={() =>
-                        update(
-                          "education",
-                          profile.education.filter((_, idx) => idx !== i)
-                        )
+                        update("education", profile.education.filter((_, idx) => idx !== i))
                       }
                     >
                       <Trash2 className="h-4 w-4" />
@@ -144,7 +147,6 @@ function ProfilePage() {
               ))}
             </Section>
 
-            {/* Experiências */}
             <Section
               title="Experiências"
               onAdd={() =>
@@ -154,9 +156,7 @@ function ProfilePage() {
                 ])
               }
             >
-              {profile.experiences.length === 0 && (
-                <Empty text="Nenhuma experiência adicionada." />
-              )}
+              {profile.experiences.length === 0 && <Empty text="Nenhuma experiência adicionada." />}
               {profile.experiences.map((ex, i) => (
                 <div
                   key={i}
@@ -221,7 +221,6 @@ function ProfilePage() {
               ))}
             </Section>
 
-            {/* Habilidades */}
             <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <h2 className="text-base font-semibold">Habilidades</h2>
               <p className="text-sm text-muted-foreground">Adicione uma por vez.</p>
@@ -257,7 +256,7 @@ function ProfilePage() {
                   {profile.skills.map((s, i) => (
                     <li
                       key={i}
-                      className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground"
+                      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-secondary to-accent/60 px-3 py-1 text-sm text-secondary-foreground"
                     >
                       {s}
                       <button
@@ -265,10 +264,7 @@ function ProfilePage() {
                         aria-label={`Remover ${s}`}
                         className="text-muted-foreground hover:text-foreground"
                         onClick={() =>
-                          update(
-                            "skills",
-                            profile.skills.filter((_, idx) => idx !== i)
-                          )
+                          update("skills", profile.skills.filter((_, idx) => idx !== i))
                         }
                       >
                         ×
@@ -282,13 +278,17 @@ function ProfilePage() {
         </Tabs>
 
         <div className="mt-8 flex justify-end">
-          <Button onClick={save}>
-            <Save className="mr-2 h-4 w-4" /> Salvar
+          <Button onClick={save} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar"}
           </Button>
         </div>
       </div>
     </PageShell>
   );
+}
+
+function Loading() {
+  return <div className="mx-auto max-w-4xl px-4 py-20 text-center text-sm text-muted-foreground">Carregando...</div>;
 }
 
 function Field({

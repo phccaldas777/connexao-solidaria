@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { RotateCcw, BarChart3 } from "lucide-react";
 import { useMemo } from "react";
 import {
@@ -11,23 +11,23 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/PageShell";
-import { store, useStoreSync } from "@/lib/store";
+import { useAuth, useAnswers } from "@/lib/store";
 import { computeResults } from "@/lib/quiz";
 
 export const Route = createFileRoute("/resultados")({
   head: () => ({ meta: [{ title: "Resultados — Conexão Solidária" }] }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined" && !store.isAuthed()) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: ResultsPage,
 });
 
 function ResultsPage() {
-  const answers = useStoreSync(() => store.getAnswers());
+  const { user, isAuthed, loading: authLoading } = useAuth();
+  const { answers, loading } = useAnswers(user);
   const completed = Object.keys(answers).length >= 12;
   const { areas, radar } = useMemo(() => computeResults(answers), [answers]);
+
+  if (authLoading) return <PageShell><Loading /></PageShell>;
+  if (!isAuthed) return <Navigate to="/login" />;
+  if (loading) return <PageShell><Loading /></PageShell>;
 
   if (!completed) {
     return (
@@ -75,20 +75,20 @@ function ResultsPage() {
           <div className="mt-4 h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radar} outerRadius="75%">
-                <PolarGrid stroke="oklch(0.92 0.012 245)" />
-                <PolarAngleAxis dataKey="axis" tick={{ fill: "oklch(0.42 0.04 250)", fontSize: 12 }} />
+                <PolarGrid stroke="oklch(0.9 0.02 280)" />
+                <PolarAngleAxis dataKey="axis" tick={{ fill: "oklch(0.35 0.05 280)", fontSize: 12 }} />
                 <PolarRadiusAxis
                   angle={90}
                   domain={[0, 100]}
-                  tick={{ fill: "oklch(0.55 0.03 250)", fontSize: 10 }}
-                  stroke="oklch(0.9 0.012 245)"
+                  tick={{ fill: "oklch(0.55 0.04 280)", fontSize: 10 }}
+                  stroke="oklch(0.9 0.02 280)"
                 />
                 <Radar
                   name="Perfil"
                   dataKey="value"
-                  stroke="oklch(0.48 0.09 255)"
-                  fill="oklch(0.48 0.09 255)"
-                  fillOpacity={0.25}
+                  stroke="oklch(0.58 0.18 280)"
+                  fill="oklch(0.58 0.18 280)"
+                  fillOpacity={0.3}
                 />
               </RadarChart>
             </ResponsiveContainer>
@@ -101,7 +101,7 @@ function ResultsPage() {
             {areas.map((a) => (
               <li
                 key={a.name}
-                className="rounded-2xl border border-border bg-card p-5 shadow-sm"
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-sm font-semibold text-foreground">{a.name}</h3>
@@ -109,7 +109,7 @@ function ResultsPage() {
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary"
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-accent"
                     style={{ width: `${a.score}%` }}
                   />
                 </div>
@@ -120,5 +120,13 @@ function ResultsPage() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-20 text-center text-sm text-muted-foreground">
+      Carregando...
+    </div>
   );
 }

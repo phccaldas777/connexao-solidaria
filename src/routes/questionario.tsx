@@ -1,35 +1,41 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import { PageShell } from "@/components/PageShell";
-import { store } from "@/lib/store";
+import { useAuth, fetchAnswers, saveAnswers, type Answers } from "@/lib/store";
 import { STEPS } from "@/lib/quiz";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/questionario")({
   head: () => ({ meta: [{ title: "Questionário — Conexão Solidária" }] }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined" && !store.isAuthed()) {
-      throw redirect({ to: "/login" });
-    }
-  },
   component: QuestionnairePage,
 });
 
 function QuestionnairePage() {
   const navigate = useNavigate();
+  const { user, isAuthed, loading: authLoading } = useAuth();
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>(
-    () => store.getAnswers()
-  );
+  const [answers, setAnswersState] = useState<Answers>({});
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchAnswers(user.id).then(({ answers }) => {
+      setAnswersState(answers);
+      setLoaded(true);
+    });
+  }, [user?.id]);
 
   const total = STEPS.length;
   const current = STEPS[step];
   const progress = ((step + 1) / total) * 100;
 
   const select = (qId: string, value: string, type: "single" | "multi") => {
-    setAnswers((prev) => {
+    setAnswersState((prev) => {
       if (type === "single") return { ...prev, [qId]: value };
       const cur = Array.isArray(prev[qId]) ? (prev[qId] as string[]) : [];
       const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
@@ -50,13 +56,26 @@ function QuestionnairePage() {
     [current, answers]
   );
 
-  const next = () => {
-    store.setAnswers(answers);
-    if (step < total - 1) {
-      setStep(step + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      navigate({ to: "/resultados" });
+  if (authLoading) return <PageShell><div className="mx-auto max-w-4xl px-4 py-20 text-center text-muted-foreground">Carregando...</div></PageShell>;
+  if (!isAuthed) return <Navigate to="/login" />;
+  if (!loaded) return <PageShell><div className="mx-auto max-w-4xl px-4 py-20 text-center text-muted-foreground">Carregando...</div></PageShell>;
+
+  const next = async () => {
+    if (!user) return;
+    setSaving(true);
+    const isLast = step === total - 1;
+    try {
+      await saveAnswers(user.id, answers, isLast);
+      if (isLast) {
+        navigate({ to: "/resultados" });
+      } else {
+        setStep(step + 1);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } catch (e) {
+      toast.error("Não foi possível salvar suas respostas. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -69,6 +88,7 @@ function QuestionnairePage() {
 
   return (
     <PageShell>
+      <Toaster />
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
@@ -79,15 +99,13 @@ function QuestionnairePage() {
           </p>
         </header>
 
-        {/* Progress bar */}
         <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-primary transition-all duration-500"
+            className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        {/* Steps indicator */}
         <ol className="mb-8 grid grid-cols-5 gap-2 text-center">
           {STEPS.map((s, i) => {
             const done = i < step;
@@ -97,8 +115,8 @@ function QuestionnairePage() {
                 <span
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium transition-colors",
-                    done && "bg-primary/15 text-primary",
-                    active && "bg-primary text-primary-foreground",
+                    done && "bg-primary/20 text-primary",
+                    active && "bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-sm",
                     !done && !active && "bg-muted text-muted-foreground"
                   )}
                 >
@@ -117,7 +135,6 @@ function QuestionnairePage() {
           })}
         </ol>
 
-        {/* Card */}
         <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
           <h2 className="text-lg font-semibold text-foreground">{current.title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{current.subtitle}</p>
@@ -143,9 +160,9 @@ function QuestionnairePage() {
                         onClick={() => select(q.id, o.value, q.type)}
                         className={cn(
                           "group flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left text-sm transition-all",
-                          "hover:border-primary/40 hover:bg-soft",
+                          "hover:border-primary/50 hover:bg-soft",
                           selected
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/25"
                             : "border-border"
                         )}
                         aria-pressed={selected}
@@ -170,16 +187,15 @@ function QuestionnairePage() {
           </div>
         </div>
 
-        {/* Footer nav */}
         <div className="mt-6 flex items-center justify-between">
-          <Button variant="outline" onClick={prev} disabled={step === 0}>
+          <Button variant="outline" onClick={prev} disabled={step === 0 || saving}>
             <ArrowLeft className="mr-1 h-4 w-4" /> Anterior
           </Button>
           <span className="text-sm text-muted-foreground">
             {step + 1} de {total}
           </span>
-          <Button onClick={next} disabled={!canProceed}>
-            {step === total - 1 ? "Ver resultados" : "Próximo"}{" "}
+          <Button onClick={next} disabled={!canProceed || saving}>
+            {saving ? "Salvando..." : step === total - 1 ? "Ver resultados" : "Próximo"}{" "}
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>

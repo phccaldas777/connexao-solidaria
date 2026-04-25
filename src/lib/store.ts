@@ -1,5 +1,9 @@
-// Simple localStorage-backed store for auth, questionnaire and profile.
-// No backend yet — keeps everything local for a calm, no-friction experience.
+// Supabase-backed store. Mantém uma API simples para os componentes
+// e usa um pequeno hook de sincronização para refletir mudanças reativamente.
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session, User } from "@supabase/supabase-js";
 
 export type Answers = Record<string, string | string[]>;
 
@@ -15,69 +19,162 @@ export interface Profile {
   skills: string[];
 }
 
-const KEYS = {
-  auth: "cs.auth",
-  answers: "cs.answers",
-  profile: "cs.profile",
-} as const;
+const emptyProfile = (): Profile => ({
+  name: "",
+  phone: "",
+  city: "",
+  state: "",
+  birthdate: "",
+  about: "",
+  education: [],
+  experiences: [],
+  skills: [],
+});
 
-function read<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+// ---------- Auth hook ----------
+export function useAuth() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // listener primeiro
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      setLoading(false);
+    });
+    // depois sessão atual
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  return {
+    session,
+    user: session?.user ?? null,
+    isAuthed: !!session?.user,
+    loading,
+  };
 }
 
-function write<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(value));
-  window.dispatchEvent(new Event("cs.update"));
-}
-
-export const store = {
-  isAuthed: () => read<{ email: string } | null>(KEYS.auth, null) !== null,
-  getUser: () => read<{ email: string } | null>(KEYS.auth, null),
-  login: (email: string) => write(KEYS.auth, { email }),
-  logout: () => {
-    if (typeof window !== "undefined") localStorage.removeItem(KEYS.auth);
-    window.dispatchEvent(new Event("cs.update"));
+// ---------- Auth actions ----------
+export const auth = {
+  async signUp(email: string, password: string) {
+    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    return supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: redirectTo },
+    });
   },
-  getAnswers: () => read<Answers>(KEYS.answers, {}),
-  setAnswers: (a: Answers) => write(KEYS.answers, a),
-  hasCompletedQuiz: () => {
-    const a = read<Answers>(KEYS.answers, {});
-    return Object.keys(a).length >= 12;
+  async signIn(email: string, password: string) {
+    return supabase.auth.signInWithPassword({ email, password });
   },
-  getProfile: () =>
-    read<Profile>(KEYS.profile, {
-      name: "",
-      phone: "",
-      city: "",
-      state: "",
-      birthdate: "",
-      about: "",
-      education: [],
-      experiences: [],
-      skills: [],
-    }),
-  setProfile: (p: Profile) => write(KEYS.profile, p),
+  async signOut() {
+    return supabase.auth.signOut();
+  },
 };
 
-import { useEffect, useState } from "react";
+// ---------- Profile ----------
+export async function fetchProfile(userId: string): Promise<Profile> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("name, phone, city, state, birthdate, about, education, experiences, skills")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return emptyProfile();
+  return {
+    name: data.name ?? "",
+    phone: data.phone ?? "",
+    city: data.city ?? "",
+    state: data.state ?? "",
+    birthdate: data.birthdate ?? "",
+    about: data.about ?? "",
+    education: (data.education as Profile["education"]) ?? [],
+    experiences: (data.experiences as Profile["experiences"]) ?? [],
+    skills: (data.skills as string[]) ?? [],
+  };
+}
 
-export function useStoreSync<T>(get: () => T): T {
-  const [v, setV] = useState<T>(get);
+export async function saveProfile(userId: string, p: Profile) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      name: p.name,
+      phone: p.phone,
+      city: p.city,
+      state: p.state,
+      birthdate: p.birthdate,
+      about: p.about,
+      education: p.education,
+      experiences: p.experiences,
+      skills: p.skills,
+    })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+// ---------- Quiz answers ----------
+export async function fetchAnswers(userId: string): Promise<{ answers: Answers; completed: boolean }> {
+  const { data, error } = await supabase
+    .from("quiz_answers")
+    .select("answers, completed")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return { answers: {}, completed: false };
+  return {
+    answers: (data.answers as Answers) ?? {},
+    completed: !!data.completed,
+  };
+}
+
+export async function saveAnswers(userId: string, answers: Answers, completed = false) {
+  const { error } = await supabase
+    .from("quiz_answers")
+    .upsert(
+      { user_id: userId, answers, completed },
+      { onConflict: "user_id" }
+    );
+  if (error) throw error;
+}
+
+// ---------- Reactive helpers ----------
+export function useProfile(user: User | null) {
+  const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const update = () => setV(get());
-    window.addEventListener("cs.update", update);
-    window.addEventListener("storage", update);
-    return () => {
-      window.removeEventListener("cs.update", update);
-      window.removeEventListener("storage", update);
-    };
-  }, []);
-  return v;
+    if (!user) {
+      setProfile(emptyProfile());
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchProfile(user.id).then((p) => {
+      setProfile(p);
+      setLoading(false);
+    });
+  }, [user?.id]);
+  return { profile, setProfile, loading };
+}
+
+export function useAnswers(user: User | null) {
+  const [answers, setAnswers] = useState<Answers>({});
+  const [completed, setCompleted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!user) {
+      setAnswers({});
+      setCompleted(false);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetchAnswers(user.id).then(({ answers, completed }) => {
+      setAnswers(answers);
+      setCompleted(completed);
+      setLoading(false);
+    });
+  }, [user?.id]);
+  return { answers, setAnswers, completed, setCompleted, loading };
 }

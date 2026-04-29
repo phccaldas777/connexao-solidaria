@@ -59,7 +59,7 @@ export function SiteHeader() {
             </SheetContent>
           </Sheet>
 
-          <Link to="/" className="flex items-center gap-2">
+          <Link to={isAuthed ? "/home" : "/"} className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-sm">
               <Heart className="h-4 w-4" aria-hidden />
             </span>

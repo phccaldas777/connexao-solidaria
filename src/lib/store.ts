@@ -61,7 +61,8 @@ export function useAuth() {
 // ---------- Auth actions ----------
 export const auth = {
   async signUp(email: string, password: string) {
-    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    const redirectTo =
+      typeof window !== "undefined" ? `${window.location.origin}/home` : undefined;
     return supabase.auth.signUp({
       email,
       password,

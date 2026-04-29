@@ -110,6 +110,15 @@ function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
+                      onInvalid={(e) => {
+                        const t = e.currentTarget;
+                        t.setCustomValidity(
+                          t.validity.valueMissing
+                            ? "Por favor, informe seu e-mail."
+                            : "Digite um e-mail válido (ex.: nome@exemplo.com)."
+                        );
+                      }}
+                      onInput={(e) => e.currentTarget.setCustomValidity("")}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -122,6 +131,10 @@ function LoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      onInvalid={(e) =>
+                        e.currentTarget.setCustomValidity("Por favor, informe sua senha.")
+                      }
+                      onInput={(e) => e.currentTarget.setCustomValidity("")}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
@@ -155,6 +168,15 @@ function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
+                      onInvalid={(e) => {
+                        const t = e.currentTarget;
+                        t.setCustomValidity(
+                          t.validity.valueMissing
+                            ? "Por favor, informe seu e-mail."
+                            : "Digite um e-mail válido (ex.: nome@exemplo.com)."
+                        );
+                      }}
+                      onInput={(e) => e.currentTarget.setCustomValidity("")}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -168,6 +190,15 @@ function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
+                      onInvalid={(e) => {
+                        const t = e.currentTarget;
+                        t.setCustomValidity(
+                          t.validity.valueMissing
+                            ? "Por favor, crie uma senha."
+                            : "A senha precisa ter pelo menos 6 caracteres."
+                        );
+                      }}
+                      onInput={(e) => e.currentTarget.setCustomValidity("")}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
